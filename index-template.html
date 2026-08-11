@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="하루 한자">
+<meta name="theme-color" content="#f6efe3">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>하루 한자</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  background:#f6efe3;color:#3a2f25;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(78px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  -webkit-text-size-adjust:100%;
+  overscroll-behavior-y:contain;
+}
+.wrap{max-width:520px;margin:0 auto;padding:12px 16px 20px}
+
+header{display:flex;align-items:baseline;justify-content:space-between;padding:8px 2px 14px}
+header h1{font-size:20px;margin:0;letter-spacing:-.5px}
+header .date{font-size:14px;color:#8a7a68}
+
+.card{background:#fff;border-radius:22px;padding:20px 18px;box-shadow:0 4px 18px rgba(90,70,40,.10);margin-bottom:14px}
+
+.badge{display:inline-block;background:#ffd9a0;color:#8a5a12;font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px}
+.badge.gray{background:#eee5d8;color:#8a7a68}
+
+.hanja{
+  font-family:"Apple SD Gothic Neo","PingFang SC","Nanum Myeongjo",serif;
+  font-size:clamp(120px,42vw,190px);line-height:1.05;text-align:center;
+  margin:8px 0 4px;color:#2c2419;
+}
+.hunum{text-align:center;font-size:30px;font-weight:800;letter-spacing:-1px;margin:0 0 4px}
+.hunum .eum{color:#c0392b}
+.center{text-align:center}
+
+.wordlist{margin-top:6px}
+.word{display:flex;align-items:center;gap:12px;padding:12px 4px;border-top:1px dashed #ece2d3}
+.word .wc{font-family:"Apple SD Gothic Neo","PingFang SC",serif;font-size:30px;min-width:74px;letter-spacing:2px}
+.word .wk{font-size:17px;font-weight:700}
+.word .wm{font-size:14px;color:#8a7a68;margin-top:2px}
+
+button{font-family:inherit}
+.btn{
+  display:block;width:100%;min-height:56px;border:0;border-radius:18px;
+  background:#f2994a;color:#fff;font-size:19px;font-weight:800;cursor:pointer;
+  box-shadow:0 3px 0 #d97c2c;margin-top:6px
+}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #d97c2c}
+.btn.sub{background:#fff;color:#8a7a68;box-shadow:0 0 0 2px #e6dbc9 inset;min-height:48px;font-size:16px}
+.btn.done{background:#cfc3b0;box-shadow:0 3px 0 #b8ab97}
+.row{display:flex;gap:10px}
+.row .btn{margin-top:6px}
+
+/* 따라쓰기 */
+.trace-box{position:relative;margin-top:4px;border-radius:18px;background:#fffdf8;box-shadow:0 0 0 2px #efe4d2 inset;overflow:hidden}
+canvas{display:block;width:100%;touch-action:none}
+
+/* 탭바 */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(255,255,255,.96);
+  border-top:1px solid #eadfcd;padding:6px 0 calc(6px + env(safe-area-inset-bottom));z-index:50;
+  backdrop-filter:saturate(180%) blur(10px)
+}
+.tabbar button{flex:1;border:0;background:none;padding:8px 0;font-size:12px;color:#a5947f;font-weight:700}
+.tabbar button .ic{display:block;font-size:22px;margin-bottom:2px}
+.tabbar button.on{color:#f2994a}
+
+/* 퀴즈 */
+.qhead{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#8a7a68;margin-bottom:8px}
+.bar{height:8px;background:#eee5d8;border-radius:99px;overflow:hidden;margin-bottom:14px}
+.bar i{display:block;height:100%;background:#f2994a;border-radius:99px;transition:width .25s}
+.qtext{font-size:17px;font-weight:700;text-align:center;color:#6b5b48;margin:2px 0 8px}
+.qbig{font-family:"Apple SD Gothic Neo","PingFang SC",serif;font-size:96px;text-align:center;line-height:1.15;margin:4px 0 10px}
+.qmid{font-size:34px;font-weight:800;text-align:center;margin:10px 0 14px}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{
+  min-height:76px;border:0;border-radius:18px;background:#fff;box-shadow:0 0 0 2px #ece2d3 inset;
+  font-size:22px;font-weight:800;color:#3a2f25;cursor:pointer;padding:8px
+}
+.opt.big{font-family:"Apple SD Gothic Neo","PingFang SC",serif;font-size:44px}
+.opt.ok{background:#d9f2e2;box-shadow:0 0 0 3px #4aa96c inset}
+.opt.no{background:#fadfdc;box-shadow:0 0 0 3px #d9534f inset}
+.mark{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:170px;pointer-events:none;z-index:60;opacity:0;transition:opacity .15s}
+.mark.show{opacity:.92}
+
+/* 한자책 */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cell{background:#fff;border:0;border-radius:16px;padding:10px 4px;box-shadow:0 2px 8px rgba(90,70,40,.08);cursor:pointer}
+.cell .cc{font-family:"Apple SD Gothic Neo","PingFang SC",serif;font-size:34px;line-height:1.1}
+.cell .cs{font-size:11px;color:#8a7a68;margin-top:3px}
+
+.modal{position:fixed;inset:0;background:rgba(50,40,30,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:70}
+.modal.on{display:flex}
+.modal .card{width:100%;max-width:420px;max-height:86vh;overflow:auto;margin:0}
+
+.empty{text-align:center;color:#8a7a68;padding:34px 10px;font-size:16px;line-height:1.7}
+.stat{display:flex;gap:10px;margin-bottom:14px}
+.stat div{flex:1;background:#fff;border-radius:16px;padding:12px 6px;text-align:center;box-shadow:0 2px 8px rgba(90,70,40,.08)}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:#8a7a68}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🀄 하루 한자</h1>
+    <div class="date" id="dateLine"></div>
+  </header>
+  <div id="view"></div>
+</div>
+
+<nav class="tabbar">
+  <button id="tab-today" onclick="go('today')"><span class="ic">📖</span>오늘</button>
+  <button id="tab-quiz" onclick="go('quiz')"><span class="ic">✏️</span>퀴즈</button>
+  <button id="tab-book" onclick="go('book')"><span class="ic">📚</span>한자책</button>
+</nav>
+
+<div class="mark" id="mark"></div>
+<div class="modal" id="modal" onclick="closeModal(event)"><div class="card" id="modalCard"></div></div>
+
+<script>
+/*__HANJA_DATA__*/
+
+/* ---------- 저장 ---------- */
+const KEY='hanjaDaily_v1';
+let S={learned:[],quiz:[],stars:0};
+function load(){
+  try{const r=localStorage.getItem(KEY); if(r){const p=JSON.parse(r);
+    S.learned=Array.isArray(p.learned)?p.learned:[];
+    S.quiz=Array.isArray(p.quiz)?p.quiz:[];
+    S.stars=Number(p.stars)||0;}
+  }catch(e){}
+}
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+
+/* ---------- 날짜 ---------- */
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function today(){return new Date();}
+function todayKey(){return ymd(today());}
+function mondayKey(){
+  const d=today(), dow=d.getDay(), back=(dow===0?6:dow-1);
+  return ymd(new Date(d.getFullYear(),d.getMonth(),d.getDate()-back));
+}
+const DOW=['일','월','화','수','목','금','토'];
+function isWeekend(){const g=today().getDay();return g===0||g===6;}
+
+/* ---------- 소리 ---------- */
+let AC=null,unlocked=false;
+function unlock(){
+  if(unlocked)return; unlocked=true;
+  try{AC=new (window.AudioContext||window.webkitAudioContext)();
+    const b=AC.createBuffer(1,1,22050),s=AC.createBufferSource();
+    s.buffer=b;s.connect(AC.destination);s.start(0);}catch(e){}
+}
+document.addEventListener('touchstart',unlock,{once:true});
+document.addEventListener('click',unlock,{once:true});
+function beep(ok){
+  if(!AC)return;
+  try{
+    const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
+    o.connect(g);g.connect(AC.destination);o.type='sine';
+    if(ok){o.frequency.setValueAtTime(660,t);o.frequency.setValueAtTime(990,t+.10);}
+    else{o.frequency.setValueAtTime(300,t);o.frequency.setValueAtTime(200,t+.12);}
+    g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
+    o.start(t);o.stop(t+.3);
+  }catch(e){}
+}
+function speak(txt){
+  try{if(!('speechSynthesis' in window))return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(txt);u.lang='ko-KR';u.rate=.85;
+    speechSynthesis.speak(u);}catch(e){}
+}
+
+/* ---------- 공통 ---------- */
+const $=id=>document.getElementById(id);
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function learnedIdx(){return S.learned.map(e=>e.i);}
+function weekIdx(){const m=mondayKey();return S.learned.filter(e=>e.date>=m).map(e=>e.i);}
+function todayEntry(){const t=todayKey();return S.learned.find(e=>e.date===t);}
+
+let TAB='today';
+function go(t){TAB=t;render();window.scrollTo(0,0);}
+
+/* ---------- 화면 ---------- */
+function render(){
+  const d=today();
+  $('dateLine').textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+DOW[d.getDay()]+')';
+  ['today','quiz','book'].forEach(t=>$('tab-'+t).className=(t===TAB?'on':''));
+  if(TAB==='today')viewToday();
+  else if(TAB==='quiz')viewQuiz();
+  else viewBook();
+}
+
+/* --- 오늘 --- */
+function viewToday(){
+  const v=$('view');
+  if(isWeekend()){
+    v.innerHTML=`<div class="card center">
+      <div style="font-size:64px">🎉</div>
+      <h2 style="margin:6px 0 4px">오늘은 ${DOW[today().getDay()]}요일!</h2>
+      <p style="color:#8a7a68;line-height:1.7;margin:6px 0 16px">새 한자는 월요일부터 배워요.<br>오늘은 이번 주에 배운 한자를<br>퀴즈로 복습해 볼까요?</p>
+      <button class="btn" onclick="go('quiz')">복습 퀴즈 풀기 ✏️</button>
+      <button class="btn sub" onclick="go('book')">내 한자책 보기</button>
+    </div>`+statBox();
+    return;
+  }
+  const done=todayEntry();
+  const idx=done?done.i:S.learned.length;
+  if(idx>=HANJA.length){
+    v.innerHTML=`<div class="card center"><div style="font-size:64px">🏆</div>
+      <h2>한자 ${HANJA.length}자 완주!</h2>
+      <p style="color:#8a7a68">정말 대단해요. 퀴즈로 계속 복습해요!</p>
+      <button class="btn" onclick="go('quiz')">퀴즈 풀기</button></div>`+statBox();
+    return;
+  }
+  const h=HANJA[idx];
+  v.innerHTML=`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="badge">${h.g}</span>
+      <span class="badge gray">${idx+1} / ${HANJA.length}번째</span>
+    </div>
+    <div class="hanja" id="bigChar">${h.c}</div>
+    <div class="hunum">${esc(h.y)} <span class="eum">${esc(h.s)}</span></div>
+    <div class="center" style="margin:10px 0 2px">
+      <button class="btn sub" style="display:inline-block;width:auto;padding:0 22px" onclick="speak('${esc(h.y)} ${esc(h.s)}')">🔊 소리로 듣기</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:800;margin-bottom:2px">이 한자가 들어간 낱말</div>
+    <div class="wordlist">
+      ${h.w.map(w=>`<div class="word">
+        <div class="wc">${w[0]}</div>
+        <div><div class="wk">${esc(w[1])}</div><div class="wm">${esc(w[2])}</div></div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:800;margin-bottom:8px">손가락으로 따라 써 보기</div>
+    <div class="trace-box"><canvas id="pad"></canvas></div>
+    <button class="btn sub" onclick="clearPad()">지우고 다시 쓰기</button>
+  </div>
+
+  ${done
+    ? `<button class="btn done">오늘 공부 끝! ⭐ 참 잘했어요</button>`
+    : `<button class="btn" onclick="finishToday(${idx})">오늘 공부 끝! ⭐</button>`}
+  `+statBox();
+  setupPad(h.c);
+}
+
+function statBox(){
+  const done=S.learned.length, st=S.stars;
+  return `<div class="stat">
+    <div><b>${done}</b><span>배운 한자</span></div>
+    <div><b>${st}</b><span>모은 별 ⭐</span></div>
+    <div><b>${S.quiz.length}</b><span>푼 퀴즈</span></div>
+  </div>`;
+}
+
+function finishToday(idx){
+  if(todayEntry())return;
+  S.learned.push({i:idx,date:todayKey()});
+  S.stars+=1; save();
+  flash('⭐'); beep(true);
+  setTimeout(render,700);
+}
+
+/* --- 따라쓰기 --- */
+let padCtx=null,drawing=false;
+function setupPad(ch){
+  const cv=$('pad'); if(!cv)return;
+  const w=cv.parentNode.clientWidth, h=Math.round(w*0.82), r=window.devicePixelRatio||1;
+  cv.width=w*r; cv.height=h*r; cv.style.height=h+'px';
+  const c=cv.getContext('2d'); c.scale(r,r); padCtx=c; padCtx._w=w; padCtx._h=h; padCtx._ch=ch;
+  paintGuide();
+  const pos=e=>{const b=cv.getBoundingClientRect();
+    const t=e.touches?e.touches[0]:e; return [t.clientX-b.left,t.clientY-b.top];};
+  const start=e=>{e.preventDefault();unlock();drawing=true;const[x,y]=pos(e);
+    c.beginPath();c.moveTo(x,y);};
+  const move=e=>{if(!drawing)return;e.preventDefault();const[x,y]=pos(e);
+    c.lineTo(x,y);c.strokeStyle='#2b6cb0';c.lineWidth=9;c.lineCap='round';c.lineJoin='round';c.stroke();};
+  const end=e=>{drawing=false;};
+  cv.addEventListener('touchstart',start,{passive:false});
+  cv.addEventListener('touchmove',move,{passive:false});
+  cv.addEventListener('touchend',end);
+  cv.addEventListener('mousedown',start);
+  cv.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',end);
+}
+function paintGuide(){
+  const c=padCtx; if(!c)return;
+  const w=c._w,h=c._h;
+  c.clearRect(0,0,w,h);
+  c.save();
+  c.strokeStyle='#e7dbc8';c.lineWidth=1;c.setLineDash([6,6]);
+  c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);
+  c.moveTo(0,h/2);c.lineTo(w,h/2);c.stroke();
+  c.setLineDash([]);
+  c.fillStyle='#e3d6c1';
+  c.font=Math.round(h*0.78)+'px "Apple SD Gothic Neo","PingFang SC",serif';
+  c.textAlign='center';c.textBaseline='middle';
+  c.fillText(c._ch,w/2,h/2+h*0.04);
+  c.restore();
+}
+function clearPad(){paintGuide();}
+
+/* --- 퀴즈 --- */
+let Q=null;
+function buildQuiz(){
+  let pool=weekIdx();
+  if(pool.length<2)pool=learnedIdx();
+  pool=Array.from(new Set(pool));
+  if(pool.length<1)return null;
+  const n=Math.min(10,Math.max(4,pool.length*2));
+  const src=[];
+  while(src.length<n){ shuffle(pool).forEach(i=>{if(src.length<n)src.push(i);}); }
+  const all=learnedIdx().length>=6?learnedIdx():HANJA.map((_,i)=>i);
+  const qs=src.map((i,k)=>makeQ(i,k%3,all));
+  return {qs,cur:0,correct:0,locked:false};
+}
+function makeQ(i,type,all){
+  const h=HANJA[i];
+  const others=shuffle(all.filter(x=>x!==i)).slice(0,3).map(x=>HANJA[x]);
+  if(type===0){
+    return {t:'한자의 뜻과 소리는?',big:h.c,mid:'',
+      opts:shuffle([h].concat(others)).map(o=>({txt:o.y+' '+o.s,ok:o===h})),cls:''};
+  }
+  if(type===1){
+    return {t:'이 뜻과 소리를 가진 한자는?',big:'',mid:h.y+' '+h.s,
+      opts:shuffle([h].concat(others)).map(o=>({txt:o.c,ok:o===h})),cls:'big'};
+  }
+  const w=h.w[Math.floor(Math.random()*h.w.length)];
+  const ow=[];
+  shuffle(all.filter(x=>x!==i)).forEach(x=>{
+    HANJA[x].w.forEach(cand=>{
+      if(ow.length<3 && cand[0]!==w[0] && !ow.some(z=>z[0]===cand[0])) ow.push(cand);
+    });
+  });
+  return {t:'"'+w[2]+'" — 이 낱말을 한자로 쓰면?',big:'',mid:w[1],
+    opts:shuffle([w].concat(ow)).map(o=>({txt:o[0],ok:o===w})),cls:'big'};
+}
+function viewQuiz(){
+  const v=$('view');
+  if(!Q){
+    const learned=learnedIdx().length;
+    if(learned===0){
+      v.innerHTML=`<div class="card empty">아직 배운 한자가 없어요.<br>먼저 <b>오늘</b> 탭에서<br>한자를 한 글자 배워 볼까요?
+        <button class="btn" style="margin-top:16px" onclick="go('today')">오늘의 한자 보러 가기</button></div>`;
+      return;
+    }
+    const wk=Array.from(new Set(weekIdx()));
+    v.innerHTML=`<div class="card center">
+      <div style="font-size:56px">✏️</div>
+      <h2 style="margin:4px 0">복습 퀴즈</h2>
+      <p style="color:#8a7a68;line-height:1.7">
+        ${wk.length>=2
+          ? '이번 주에 배운 한자 <b>'+wk.length+'자</b>로 문제를 낼게요.'
+          : '지금까지 배운 한자 <b>'+learned+'자</b>로 문제를 낼게요.'}
+      </p>
+      <div class="center" style="font-size:30px;letter-spacing:4px;margin:6px 0 14px;font-family:'Apple SD Gothic Neo','PingFang SC',serif">
+        ${(wk.length>=2?wk:learnedIdx()).slice(0,8).map(i=>HANJA[i].c).join('')}
+      </div>
+      <button class="btn" onclick="startQuiz()">퀴즈 시작!</button>
+    </div>`+statBox();
+    return;
+  }
+  if(Q.cur>=Q.qs.length){ viewResult(); return; }
+  const q=Q.qs[Q.cur];
+  v.innerHTML=`<div class="card">
+    <div class="qhead"><span>${Q.cur+1} / ${Q.qs.length}번</span><span>맞힌 개수 ${Q.correct}</span></div>
+    <div class="bar"><i style="width:${(Q.cur/Q.qs.length*100)}%"></i></div>
+    <div class="qtext">${esc(q.t)}</div>
+    ${q.big?`<div class="qbig">${q.big}</div>`:''}
+    ${q.mid?`<div class="qmid">${esc(q.mid)}</div>`:''}
+    <div class="opts" id="opts">
+      ${q.opts.map((o,k)=>`<button class="opt ${q.cls}" id="o${k}" onclick="answer(${k})">${o.txt}</button>`).join('')}
+    </div>
+  </div>
+  <button class="btn sub" onclick="quitQuiz()">그만하기</button>`;
+}
+function answer(k){
+  if(Q.locked)return; Q.locked=true; unlock();
+  const q=Q.qs[Q.cur];
+  const ok=q.opts[k].ok;
+  q.opts.forEach((o,j)=>{ if(o.ok)$('o'+j).classList.add('ok'); });
+  if(!ok)$('o'+k).classList.add('no');
+  if(ok)Q.correct++;
+  flash(ok?'⭕':'❌'); beep(ok);
+  setTimeout(()=>{Q.cur++;Q.locked=false;viewQuiz();},ok?750:1350);
+}
+function startQuiz(){ Q=buildQuiz(); viewQuiz(); }
+function quitQuiz(){ Q=null; viewQuiz(); }
+function viewResult(){
+  const n=Q.qs.length,c=Q.correct;
+  const got=c>=n?3:(c>=Math.ceil(n*0.7)?2:1);
+  S.quiz.push({date:todayKey(),correct:c,total:n});
+  S.stars+=got; save();
+  const msg=c>=n?'전부 다 맞혔어요! 최고예요!':(c>=Math.ceil(n*0.7)?'아주 잘했어요!':'좋아요, 한 번 더 해볼까요?');
+  $('view').innerHTML=`<div class="card center">
+    <div style="font-size:60px">${c>=n?'🏆':'🎊'}</div>
+    <h2 style="margin:6px 0">${n}문제 중 ${c}개 정답!</h2>
+    <div style="font-size:34px;letter-spacing:4px">${'⭐'.repeat(got)}</div>
+    <p style="color:#8a7a68;margin:10px 0 16px">${msg}<br>별 ${got}개를 받았어요.</p>
+    <button class="btn" onclick="startQuiz()">한 번 더 풀기</button>
+    <button class="btn sub" onclick="quitQuiz()">그만하기</button>
+  </div>`+statBox();
+  Q=null;
+}
+
+/* --- 한자책 --- */
+function viewBook(){
+  const v=$('view');
+  const list=S.learned.slice().reverse();
+  if(!list.length){
+    v.innerHTML=`<div class="card empty">아직 모은 한자가 없어요.<br>월요일부터 하루 한 글자씩 모아 봐요!
+      <button class="btn" style="margin-top:16px" onclick="go('today')">오늘의 한자 보러 가기</button></div>`;
+    return;
+  }
+  v.innerHTML=statBox()+`<div class="card">
+    <div style="font-weight:800;margin-bottom:10px">내가 모은 한자 ${list.length}자</div>
+    <div class="grid">
+      ${list.map(e=>`<button class="cell" onclick="detail(${e.i})">
+        <div class="cc">${HANJA[e.i].c}</div><div class="cs">${esc(HANJA[e.i].s)}</div></button>`).join('')}
+    </div>
+  </div>`;
+}
+function detail(i){
+  const h=HANJA[i];
+  $('modalCard').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="badge">${h.g}</span>
+      <button class="btn sub" style="width:auto;padding:0 16px;min-height:40px;margin:0" onclick="closeModal(1)">닫기</button>
+    </div>
+    <div class="hanja" style="font-size:120px">${h.c}</div>
+    <div class="hunum">${esc(h.y)} <span class="eum">${esc(h.s)}</span></div>
+    <div class="wordlist">
+      ${h.w.map(w=>`<div class="word"><div class="wc">${w[0]}</div>
+        <div><div class="wk">${esc(w[1])}</div><div class="wm">${esc(w[2])}</div></div></div>`).join('')}
+    </div>
+    <button class="btn sub" onclick="speak('${esc(h.y)} ${esc(h.s)}')">🔊 소리로 듣기</button>`;
+  $('modal').classList.add('on');
+}
+function closeModal(e){
+  if(e===1||e.target===$('modal'))$('modal').classList.remove('on');
+}
+
+/* --- 도장 애니메이션 --- */
+let mt=null;
+function flash(ch){
+  const m=$('mark'); m.textContent=ch; m.classList.add('show');
+  clearTimeout(mt); mt=setTimeout(()=>m.classList.remove('show'),650);
+}
+
+/* ---------- 시작 ---------- */
+load();
+TAB=isWeekend()?'quiz':'today';
+render();
+window.addEventListener('resize',()=>{ if(TAB==='today'&&$('pad'))render(); });
+</script>
+</body>
+</html>
