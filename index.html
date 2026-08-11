@@ -95,6 +95,17 @@ canvas{display:block;width:100%;touch-action:none}
 .cell{background:#fff;border:0;border-radius:16px;padding:10px 4px;box-shadow:0 2px 8px rgba(90,70,40,.08);cursor:pointer}
 .cell .cc{font-family:"Apple SD Gothic Neo","PingFang SC",serif;font-size:34px;line-height:1.1}
 .cell .cs{font-size:11px;color:#8a7a68;margin-top:3px}
+.cell.locked{opacity:.38}
+.cell.next{box-shadow:0 0 0 3px #f2994a inset}
+.cell .chk{font-size:11px;font-weight:800;color:#4aa96c;margin-top:1px}
+
+.seg{display:flex;background:#efe6d7;border-radius:15px;padding:4px;gap:4px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;border-radius:11px;min-height:44px;font-size:15px;font-weight:800;color:#8a7a68}
+.seg button.on{background:#fff;color:#3a2f25;box-shadow:0 1px 5px rgba(90,70,40,.18)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;-webkit-overflow-scrolling:touch}
+.chips button{flex:0 0 auto;border:0;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:700;background:#efe6d7;color:#8a7a68}
+.chips button.on{background:#f2994a;color:#fff}
+.legend{font-size:12px;color:#8a7a68;line-height:1.6;margin:2px 0 10px}
 
 .modal{position:fixed;inset:0;background:rgba(50,40,30,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:70}
 .modal.on{display:flex}
@@ -850,29 +861,89 @@ function viewWrong(){
   <button class="btn sub" onclick="go('book')">내 한자책 보기</button>`;
 }
 
-/* --- 한자책 --- */
+/* --- 한자책 (모은 한자 / 전체 목록) --- */
+const GRADES=['전체'].concat(HANJA.map(h=>h.g).filter((g,k,a)=>a.indexOf(g)===k));
+let BOOKMODE='mine',GFILTER='전체';
+function setBook(m){BOOKMODE=m;render();window.scrollTo(0,0);}
+function setG(g){GFILTER=g;render();window.scrollTo(0,0);}
+
 function viewBook(){
   const v=$('view');
-  const list=S.learned.slice().reverse();
-  if(!list.length){
-    v.innerHTML=`<div class="card empty">아직 모은 한자가 없어요.<br>월요일부터 하루 한 글자씩 모아 봐요!
-      <button class="btn" style="margin-top:16px" onclick="go('today')">오늘의 한자 보러 가기</button></div>`;
+  const learnedSet=new Set(learnedIdx());
+  const seg=`<div class="seg">
+    <button class="${BOOKMODE==='mine'?'on':''}" onclick="setBook('mine')">모은 한자 ${learnedSet.size}</button>
+    <button class="${BOOKMODE==='all'?'on':''}" onclick="setBook('all')">전체 ${HANJA.length}자</button>
+  </div>`;
+
+  if(BOOKMODE==='mine'){
+    const list=S.learned.slice().reverse();
+    if(!list.length){
+      v.innerHTML=seg+`<div class="card empty">아직 모은 한자가 없어요.<br>월요일부터 하루 한 글자씩 모아 봐요!
+        <button class="btn" style="margin-top:16px" onclick="go('today')">오늘의 한자 보러 가기</button>
+        <button class="btn sub" onclick="setBook('all')">앞으로 배울 한자 미리 보기</button></div>`;
+      return;
+    }
+    v.innerHTML=seg+statBox()+`<div class="card">
+      <div style="font-weight:800;margin-bottom:10px">내가 모은 한자 ${list.length}자 <span style="font-weight:400;color:#8a7a68;font-size:13px">(최근에 배운 순)</span></div>
+      <div class="grid">
+        ${list.map(e=>`<button class="cell" onclick="detail(${e.i})">
+          <div class="cc">${HANJA[e.i].c}</div><div class="cs">${esc(HANJA[e.i].s)}</div></button>`).join('')}
+      </div>
+    </div>`;
     return;
   }
-  v.innerHTML=statBox()+`<div class="card">
-    <div style="font-weight:800;margin-bottom:10px">내가 모은 한자 ${list.length}자</div>
+
+  /* 전체 목록 */
+  const next=learnedSet.size;
+  const idxs=HANJA.map((h,i)=>i).filter(i=>GFILTER==='전체'||HANJA[i].g===GFILTER);
+  const doneHere=idxs.filter(i=>learnedSet.has(i)).length;
+  const pct=Math.round(learnedSet.size/HANJA.length*100);
+  v.innerHTML=seg+`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+      <div style="font-weight:800">전체 ${HANJA.length}자 중 ${learnedSet.size}자 배웠어요</div>
+      <span style="color:#8a7a68;font-size:13px">${pct}%</span>
+    </div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="chips">
+      ${GRADES.map(g=>`<button class="${GFILTER===g?'on':''}" onclick="setG('${g}')">${g}</button>`).join('')}
+    </div>
+    <div class="legend">
+      쉬운 순서대로 나열했어요. 진하게 보이는 글자가 이미 배운 한자예요.<br>
+      주황색 테두리는 <b>다음에 배울 한자</b>. 아직 안 배운 글자도 눌러서 미리 볼 수 있어요.
+    </div>
+    <div style="font-weight:800;font-size:14px;color:#8a7a68;margin-bottom:8px">
+      ${GFILTER==='전체'?'전체':GFILTER} ${idxs.length}자 · 배운 것 ${doneHere}자
+    </div>
     <div class="grid">
-      ${list.map(e=>`<button class="cell" onclick="detail(${e.i})">
-        <div class="cc">${HANJA[e.i].c}</div><div class="cs">${esc(HANJA[e.i].s)}</div></button>`).join('')}
+      ${idxs.map(i=>{
+        const on=learnedSet.has(i);
+        const cls='cell'+(on?'':' locked')+(i===next?' next':'');
+        return `<button class="${cls}" onclick="detail(${i})">
+          <div class="cc">${HANJA[i].c}</div>
+          <div class="cs">${esc(HANJA[i].s)}</div>
+          <div class="chk">${on?'✓ 배움':(i===next?'다음':(i+1)+'번')}</div>
+        </button>`;
+      }).join('')}
     </div>
   </div>`;
 }
+
 function detail(i){
   const h=HANJA[i];
+  const e=S.learned.find(x=>x.i===i);
+  const m=S.miss[i];
+  const p = e ? e.date.split('-') : null;
+  const note = e
+    ? `${+p[1]}월 ${+p[2]}일에 배웠어요`
+    : (i===learnedIdx().length ? '다음에 배울 한자예요' : `${i+1}번째로 배울 한자예요`);
   $('modalCard').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center">
       <span class="badge">${h.g}</span>
       <button class="btn sub" style="width:auto;padding:0 16px;min-height:40px;margin:0" onclick="closeModal(1)">닫기</button>
+    </div>
+    <div class="center" style="margin-top:10px;color:#8a7a68;font-size:13px">
+      ${note}${m?` · 퀴즈에서 ${m.w}번 틀렸어요`:''}
     </div>
     <div class="hanja" style="font-size:120px">${h.c}</div>
     <div class="hunum">${esc(h.y)} <span class="eum">${esc(h.s)}</span></div>
