@@ -120,6 +120,7 @@ canvas{display:block;width:100%;touch-action:none}
 <nav class="tabbar">
   <button id="tab-today" onclick="go('today')"><span class="ic">📖</span>오늘</button>
   <button id="tab-quiz" onclick="go('quiz')"><span class="ic">✏️</span>퀴즈</button>
+  <button id="tab-wrong" onclick="go('wrong')"><span class="ic">🔁</span><span id="wrongLabel">오답</span></button>
   <button id="tab-book" onclick="go('book')"><span class="ic">📚</span>한자책</button>
 </nav>
 
@@ -131,12 +132,14 @@ canvas{display:block;width:100%;touch-action:none}
 
 /* ---------- 저장 ---------- */
 const KEY='hanjaDaily_v1';
-let S={learned:[],quiz:[],stars:0};
+let S={learned:[],quiz:[],stars:0,miss:{},fixed:0};
 function load(){
   try{const r=localStorage.getItem(KEY); if(r){const p=JSON.parse(r);
     S.learned=Array.isArray(p.learned)?p.learned:[];
     S.quiz=Array.isArray(p.quiz)?p.quiz:[];
-    S.stars=Number(p.stars)||0;}
+    S.stars=Number(p.stars)||0;
+    S.miss=(p.miss&&typeof p.miss==='object')?p.miss:{};
+    S.fixed=Number(p.fixed)||0;}
   }catch(e){}
 }
 function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
@@ -187,6 +190,18 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 function learnedIdx(){return S.learned.map(e=>e.i);}
 function weekIdx(){const m=mondayKey();return S.learned.filter(e=>e.date>=m).map(e=>e.i);}
 function todayEntry(){const t=todayKey();return S.learned.find(e=>e.date===t);}
+/* 오답 한자: 틀린 적 있고 아직 졸업하지 않은 글자. 많이 틀린 순 */
+function wrongList(){
+  return Object.keys(S.miss)
+    .map(k=>({i:Number(k),w:S.miss[k].w||0,s:S.miss[k].s||0}))
+    .filter(o=>HANJA[o.i])
+    .sort((a,b)=>b.w-a.w||a.i-b.i);
+}
+
+function syncWrongLabel(){
+  const n=wrongList().length;
+  $('wrongLabel').textContent=n?('오답 '+n):'오답';
+}
 
 let TAB='today';
 function go(t){TAB=t;render();window.scrollTo(0,0);}
@@ -195,9 +210,11 @@ function go(t){TAB=t;render();window.scrollTo(0,0);}
 function render(){
   const d=today();
   $('dateLine').textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+DOW[d.getDay()]+')';
-  ['today','quiz','book'].forEach(t=>$('tab-'+t).className=(t===TAB?'on':''));
+  ['today','quiz','wrong','book'].forEach(t=>$('tab-'+t).className=(t===TAB?'on':''));
+  syncWrongLabel();
   if(TAB==='today')viewToday();
   else if(TAB==='quiz')viewQuiz();
+  else if(TAB==='wrong')viewWrong();
   else viewBook();
 }
 
@@ -261,11 +278,11 @@ function viewToday(){
 }
 
 function statBox(){
-  const done=S.learned.length, st=S.stars;
   return `<div class="stat">
-    <div><b>${done}</b><span>배운 한자</span></div>
-    <div><b>${st}</b><span>모은 별 ⭐</span></div>
-    <div><b>${S.quiz.length}</b><span>푼 퀴즈</span></div>
+    <div><b>${S.learned.length}</b><span>배운 한자</span></div>
+    <div><b>${S.stars}</b><span>별 ⭐</span></div>
+    <div><b>${wrongList().length}</b><span>오답</span></div>
+    <div><b>${S.fixed}</b><span>졸업 🎉</span></div>
   </div>`;
 }
 
@@ -317,10 +334,11 @@ function paintGuide(){
 function clearPad(){paintGuide();}
 
 /* --- 퀴즈 --- */
-let Q=null;
-function buildQuiz(){
-  let pool=weekIdx();
-  if(pool.length<2)pool=learnedIdx();
+let Q=null,QLAST=null;
+function buildQuiz(mode){
+  let pool;
+  if(mode==='wrong'){ pool=wrongList().map(o=>o.i); }
+  else { pool=weekIdx(); if(pool.length<2)pool=learnedIdx(); }
   pool=Array.from(new Set(pool));
   if(pool.length<1)return null;
   const n=Math.min(10,Math.max(4,pool.length*2));
@@ -328,17 +346,17 @@ function buildQuiz(){
   while(src.length<n){ shuffle(pool).forEach(i=>{if(src.length<n)src.push(i);}); }
   const all=learnedIdx().length>=6?learnedIdx():HANJA.map((_,i)=>i);
   const qs=src.map((i,k)=>makeQ(i,k%3,all));
-  return {qs,cur:0,correct:0,locked:false};
+  return {qs,cur:0,correct:0,locked:false,mode:mode||'week'};
 }
 function makeQ(i,type,all){
   const h=HANJA[i];
   const others=shuffle(all.filter(x=>x!==i)).slice(0,3).map(x=>HANJA[x]);
   if(type===0){
-    return {t:'한자의 뜻과 소리는?',big:h.c,mid:'',
+    return {i:i,t:'한자의 뜻과 소리는?',big:h.c,mid:'',
       opts:shuffle([h].concat(others)).map(o=>({txt:o.y+' '+o.s,ok:o===h})),cls:''};
   }
   if(type===1){
-    return {t:'이 뜻과 소리를 가진 한자는?',big:'',mid:h.y+' '+h.s,
+    return {i:i,t:'이 뜻과 소리를 가진 한자는?',big:'',mid:h.y+' '+h.s,
       opts:shuffle([h].concat(others)).map(o=>({txt:o.c,ok:o===h})),cls:'big'};
   }
   const w=h.w[Math.floor(Math.random()*h.w.length)];
@@ -348,7 +366,7 @@ function makeQ(i,type,all){
       if(ow.length<3 && cand[0]!==w[0] && !ow.some(z=>z[0]===cand[0])) ow.push(cand);
     });
   });
-  return {t:'"'+w[2]+'" — 이 낱말을 한자로 쓰면?',big:'',mid:w[1],
+  return {i:i,t:'"'+w[2]+'" — 이 낱말을 한자로 쓰면?',big:'',mid:w[1],
     opts:shuffle([w].concat(ow)).map(o=>({txt:o[0],ok:o===w})),cls:'big'};
 }
 function viewQuiz(){
@@ -373,6 +391,7 @@ function viewQuiz(){
         ${(wk.length>=2?wk:learnedIdx()).slice(0,8).map(i=>HANJA[i].c).join('')}
       </div>
       <button class="btn" onclick="startQuiz()">퀴즈 시작!</button>
+      ${wrongList().length?`<button class="btn sub" onclick="startWrongQuiz()">틀린 한자 ${wrongList().length}자만 모아 풀기 🔁</button>`:''}
     </div>`+statBox();
     return;
   }
@@ -397,26 +416,84 @@ function answer(k){
   q.opts.forEach((o,j)=>{ if(o.ok)$('o'+j).classList.add('ok'); });
   if(!ok)$('o'+k).classList.add('no');
   if(ok)Q.correct++;
-  flash(ok?'⭕':'❌'); beep(ok);
+  const grad=record(q.i,ok);
+  syncWrongLabel();
+  flash(grad?'🎉':(ok?'⭕':'❌')); beep(ok);
   setTimeout(()=>{Q.cur++;Q.locked=false;viewQuiz();},ok?750:1350);
 }
-function startQuiz(){ Q=buildQuiz(); viewQuiz(); }
-function quitQuiz(){ Q=null; viewQuiz(); }
+/* 오답 기록: 틀리면 오답 노트에 넣고, 그 뒤 2번 연속 맞히면 졸업 */
+function record(i,ok){
+  if(i==null||!HANJA[i])return false;
+  let grad=false;
+  if(!ok){
+    const m=S.miss[i]||{w:0,s:0};
+    m.w++; m.s=0; S.miss[i]=m;
+  }else if(S.miss[i]){
+    S.miss[i].s=(S.miss[i].s||0)+1;
+    if(S.miss[i].s>=2){ delete S.miss[i]; S.fixed++; S.stars++; grad=true; }
+  }
+  save();
+  return grad;
+}
+function startQuiz(mode){ Q=buildQuiz(mode); viewQuiz(); }
+function quitQuiz(){ const m=Q?Q.mode:QLAST; Q=null; QLAST=null; if(m==='wrong')go('wrong'); else go('quiz'); }
 function viewResult(){
-  const n=Q.qs.length,c=Q.correct;
+  const n=Q.qs.length,c=Q.correct,mode=Q.mode;
   const got=c>=n?3:(c>=Math.ceil(n*0.7)?2:1);
   S.quiz.push({date:todayKey(),correct:c,total:n});
   S.stars+=got; save();
   const msg=c>=n?'전부 다 맞혔어요! 최고예요!':(c>=Math.ceil(n*0.7)?'아주 잘했어요!':'좋아요, 한 번 더 해볼까요?');
+  const left=wrongList().length;
   $('view').innerHTML=`<div class="card center">
     <div style="font-size:60px">${c>=n?'🏆':'🎊'}</div>
     <h2 style="margin:6px 0">${n}문제 중 ${c}개 정답!</h2>
     <div style="font-size:34px;letter-spacing:4px">${'⭐'.repeat(got)}</div>
-    <p style="color:#8a7a68;margin:10px 0 16px">${msg}<br>별 ${got}개를 받았어요.</p>
-    <button class="btn" onclick="startQuiz()">한 번 더 풀기</button>
+    <p style="color:#8a7a68;margin:10px 0 16px">${msg}<br>별 ${got}개를 받았어요.
+      ${mode==='wrong'?('<br>오답 한자가 '+(left?left+'자 남았어요.':'모두 없어졌어요! 🎉')):''}</p>
+    ${mode==='wrong'&&left
+      ? `<button class="btn" onclick="startWrongQuiz()">오답 한 번 더 풀기</button>`
+      : `<button class="btn" onclick="startQuiz()">한 번 더 풀기</button>`}
     <button class="btn sub" onclick="quitQuiz()">그만하기</button>
   </div>`+statBox();
-  Q=null;
+  syncWrongLabel();
+  Q=null; QLAST=mode;
+}
+function startWrongQuiz(){ TAB='quiz'; Q=buildQuiz('wrong'); render(); window.scrollTo(0,0); }
+
+/* --- 오답 한자 --- */
+function viewWrong(){
+  const v=$('view');
+  const list=wrongList();
+  if(!list.length){
+    v.innerHTML=`<div class="card center">
+      <div style="font-size:64px">${S.fixed?'🎉':'😊'}</div>
+      <h2 style="margin:6px 0">${S.fixed?'오답 한자를 다 고쳤어요!':'아직 틀린 한자가 없어요'}</h2>
+      <p style="color:#8a7a68;line-height:1.7;margin:6px 0 16px">
+        퀴즈에서 틀린 한자는 이곳에 모여요.<br>
+        모인 한자를 <b>두 번 연속</b> 맞히면<br>졸업하고 목록에서 빠져요.
+      </p>
+      <button class="btn" onclick="go('quiz')">퀴즈 풀러 가기 ✏️</button>
+    </div>`+statBox();
+    return;
+  }
+  v.innerHTML=statBox()+`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-weight:800">자주 틀리는 한자 ${list.length}자</div>
+      <span class="badge gray">많이 틀린 순</span>
+    </div>
+    <p style="color:#8a7a68;font-size:13px;line-height:1.6;margin:2px 0 12px">
+      두 번 연속 맞히면 졸업해요. 글자를 누르면 뜻과 낱말을 다시 볼 수 있어요.</p>
+    <div class="grid">
+      ${list.map(o=>`<button class="cell" onclick="detail(${o.i})">
+        <div class="cc">${HANJA[o.i].c}</div>
+        <div class="cs">${esc(HANJA[o.i].s)}</div>
+        <div class="cs" style="color:#d9534f;font-weight:700">${o.s?'✓'+o.s+'번째':'✗'+o.w+'번'}</div>
+      </button>`).join('')}
+    </div>
+  </div>
+  <button class="btn" onclick="startWrongQuiz()">오답 한자만 모아 풀기 🔁</button>
+  <button class="btn sub" onclick="go('book')">내 한자책 보기</button>`;
 }
 
 /* --- 한자책 --- */
