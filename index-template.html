@@ -143,17 +143,43 @@ canvas{display:block;width:100%;touch-action:none}
 
 /* ---------- 저장 ---------- */
 const KEY='hanjaDaily_v1';
-let S={learned:[],quiz:[],stars:0,miss:{},fixed:0};
+let S={learned:[],quiz:[],stars:0,miss:{},fixed:0,order:'mix',seed:0};
 function load(){
   try{const r=localStorage.getItem(KEY); if(r){const p=JSON.parse(r);
     S.learned=Array.isArray(p.learned)?p.learned:[];
     S.quiz=Array.isArray(p.quiz)?p.quiz:[];
     S.stars=Number(p.stars)||0;
     S.miss=(p.miss&&typeof p.miss==='object')?p.miss:{};
-    S.fixed=Number(p.fixed)||0;}
+    S.fixed=Number(p.fixed)||0;
+    S.order=(p.order==='easy')?'easy':'mix';
+    S.seed=Number(p.seed)||0;}
   }catch(e){}
+  if(!S.seed){ S.seed=Math.floor(Math.random()*1e9)+1; save(); }
 }
 function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+
+/* ---------- 오늘의 한자 고르기 ---------- */
+const BANDS=HANJA.map(h=>h.g).filter((g,k,a)=>a.indexOf(g)===k);   /* 8급 → 7급 → 6급 → 5급 */
+function hash(str){
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  return h>>>0;
+}
+/* 섞어서 모드: 하루씩 급수를 바꿔 가며 그 급수 안에서 무작위로 한 글자.
+   같은 진도에서는 항상 같은 글자가 나오므로 새로고침해도 바뀌지 않는다. */
+function nextIndex(){
+  const got=new Set(learnedIdx());
+  const rest=HANJA.map((h,i)=>i).filter(i=>!got.has(i));
+  if(!rest.length)return -1;
+  if(S.order==='easy')return rest[0];
+  const start=S.learned.length%BANDS.length;
+  for(let k=0;k<BANDS.length;k++){
+    const cand=rest.filter(i=>HANJA[i].g===BANDS[(start+k)%BANDS.length]);
+    if(cand.length)return cand[hash(S.seed+'#'+S.learned.length)%cand.length];
+  }
+  return rest[0];
+}
+function setOrder(m){ if(S.order===m)return; S.order=m; save(); render(); }
 
 /* ---------- 날짜 ---------- */
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -239,12 +265,12 @@ function viewToday(){
       <p style="color:#8a7a68;line-height:1.7;margin:6px 0 16px">새 한자는 월요일부터 배워요.<br>오늘은 이번 주에 배운 한자를<br>퀴즈로 복습해 볼까요?</p>
       <button class="btn" onclick="go('quiz')">복습 퀴즈 풀기 ✏️</button>
       <button class="btn sub" onclick="go('book')">내 한자책 보기</button>
-    </div>`+statBox();
+    </div>`+statBox()+orderBox();
     return;
   }
   const done=todayEntry();
-  const idx=done?done.i:S.learned.length;
-  if(idx>=HANJA.length){
+  const idx=done?done.i:nextIndex();
+  if(idx<0){
     v.innerHTML=`<div class="card center"><div style="font-size:64px">🏆</div>
       <h2>한자 ${HANJA.length}자 완주!</h2>
       <p style="color:#8a7a68">정말 대단해요. 퀴즈로 계속 복습해요!</p>
@@ -256,7 +282,7 @@ function viewToday(){
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <span class="badge">${h.g}</span>
-      <span class="badge gray">${idx+1} / ${HANJA.length}번째</span>
+      <span class="badge gray">${done?S.learned.findIndex(e=>e.i===idx)+1:S.learned.length+1} / ${HANJA.length}자째</span>
     </div>
     <div class="hanja" id="bigChar">${h.c}</div>
     <div class="hunum">${esc(h.y)} <span class="eum">${esc(h.s)}</span></div>
@@ -284,8 +310,24 @@ function viewToday(){
   ${done
     ? `<button class="btn done">오늘 공부 끝! ⭐ 참 잘했어요</button>`
     : `<button class="btn" onclick="finishToday(${idx})">오늘 공부 끝! ⭐</button>`}
-  `+statBox();
+  `+statBox()+orderBox();
   setupPad(h.c);
+}
+
+/* 한자가 나오는 순서 설정 */
+function orderBox(){
+  return `<div class="card">
+    <div style="font-weight:800;margin-bottom:8px">한자가 나오는 순서</div>
+    <div class="seg">
+      <button class="${S.order==='mix'?'on':''}" onclick="setOrder('mix')">섞어서 🎲</button>
+      <button class="${S.order==='easy'?'on':''}" onclick="setOrder('easy')">쉬운 순서대로</button>
+    </div>
+    <p class="legend" style="margin:0">
+      ${S.order==='mix'
+        ? '8급 → 7급 → 6급 → 5급으로 급수를 하루씩 바꿔 가며, 그 급수 안에서 무작위로 한 글자가 나와요.'
+        : '가장 쉬운 8급부터 차례대로 한 글자씩 나와요.'}
+    </p>
+  </div>`;
 }
 
 function statBox(){
@@ -540,7 +582,7 @@ function viewBook(){
   }
 
   /* 전체 목록 */
-  const next=learnedSet.size;
+  const next=nextIndex();
   const idxs=HANJA.map((h,i)=>i).filter(i=>GFILTER==='전체'||HANJA[i].g===GFILTER);
   const doneHere=idxs.filter(i=>learnedSet.has(i)).length;
   const pct=Math.round(learnedSet.size/HANJA.length*100);
@@ -555,7 +597,7 @@ function viewBook(){
       ${GRADES.map(g=>`<button class="${GFILTER===g?'on':''}" onclick="setG('${g}')">${g}</button>`).join('')}
     </div>
     <div class="legend">
-      쉬운 순서대로 나열했어요. 진하게 보이는 글자가 이미 배운 한자예요.<br>
+      급수 순서(8급 → 5급)로 나열했어요. 진하게 보이는 글자가 이미 배운 한자예요.<br>
       주황색 테두리는 <b>다음에 배울 한자</b>. 아직 안 배운 글자도 눌러서 미리 볼 수 있어요.
     </div>
     <div style="font-weight:800;font-size:14px;color:#8a7a68;margin-bottom:8px">
@@ -568,7 +610,7 @@ function viewBook(){
         return `<button class="${cls}" onclick="detail(${i})">
           <div class="cc">${HANJA[i].c}</div>
           <div class="cs">${esc(HANJA[i].s)}</div>
-          <div class="chk">${on?'✓ 배움':(i===next?'다음':(i+1)+'번')}</div>
+          <div class="chk">${on?'✓ 배움':(i===next?'다음':(S.order==='easy'?(i+1)+'번':'&nbsp;'))}</div>
         </button>`;
       }).join('')}
     </div>
@@ -582,7 +624,8 @@ function detail(i){
   const p = e ? e.date.split('-') : null;
   const note = e
     ? `${+p[1]}월 ${+p[2]}일에 배웠어요`
-    : (i===learnedIdx().length ? '다음에 배울 한자예요' : `${i+1}번째로 배울 한자예요`);
+    : (i===nextIndex() ? '다음에 배울 한자예요'
+      : (S.order==='easy' ? `${i+1}번째로 배울 한자예요` : '아직 배우지 않은 한자예요'));
   $('modalCard').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center">
       <span class="badge">${h.g}</span>
